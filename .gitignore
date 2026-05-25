@@ -1,0 +1,24 @@
+# Env & secrets
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Data
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/vectorstore/*
+!backend/vectorstore/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.log
