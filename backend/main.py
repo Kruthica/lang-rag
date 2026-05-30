@@ -23,7 +23,6 @@ print("ENV PATH =", env_path)
 
 load_dotenv(dotenv_path=env_path)
 
-print("KEY =", os.getenv("GEMINI_API_KEY"))
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -80,10 +79,9 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error", "code": "internal_error"},
     )
-#print("ACTUAL MODEL =", settings.embedding_model)
+
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-print("EMBED MODEL =", settings.embedding_model)
