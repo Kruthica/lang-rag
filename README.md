@@ -1,146 +1,321 @@
-# Production RAG System
+# Lang-RAG
 
-A full-stack **Retrieval-Augmented Generation (RAG)** application: upload PDFs, embed with **Google Gemini**, store vectors in **ChromaDB**, and chat with grounded answers and source citations.
+A production-ready Retrieval-Augmented Generation (RAG) system built with FastAPI, React, ChromaDB, and Hugging Face embeddings. Upload PDF documents, index them into a vector database, and interact with them through a conversational AI interface with source-grounded responses.
+
+---
 
 ## Features
 
-- Modern dark chat UI (React, Tailwind, Framer Motion)
-- PDF upload (drag & drop, multiple files, progress)
-- PDF ingestion with PyPDFLoader and text cleaning
-- Chunking (1000 / 200 overlap) with metadata (filename, page)
-- Gemini embeddings + ChromaDB persistence
-- Top-5 similarity retrieval with confidence scores
-- Gemini 2.0 Flash grounded answers
-- Conversational history for follow-ups
-- Streaming responses (SSE)
-- Markdown + syntax highlighting, copy/regenerate/clear chat
-- Docker Compose deployment
+### Document Management
 
-## Project structure
+* Upload single or multiple PDF documents
+* Automatic PDF text extraction
+* Document listing and deletion
+* Persistent document storage
 
-```
+### RAG Pipeline
+
+* PDF parsing and text cleaning
+* Intelligent text chunking with overlap
+* Hugging Face sentence-transformer embeddings
+* ChromaDB vector storage and retrieval
+* Metadata-aware document indexing
+
+### Conversational AI
+
+* Context-aware question answering
+* Source-grounded responses
+* Conversation history support
+* Streaming responses using Server-Sent Events (SSE)
+* Confidence-based document retrieval
+
+### Modern Frontend
+
+* React + Vite
+* Responsive UI
+* Drag-and-drop file uploads
+* Real-time chat interface
+* Markdown rendering
+* Syntax highlighting
+* Upload progress tracking
+
+### Deployment Ready
+
+* FastAPI backend
+* Vercel frontend deployment
+* Render backend deployment
+* Docker support
+* Environment-based configuration
+
+---
+
+## Tech Stack
+
+### Backend
+
+* FastAPI
+* LangChain
+* ChromaDB
+* Sentence Transformers
+* Hugging Face Embeddings
+* PyPDF
+* Uvicorn
+
+### Frontend
+
+* React
+* Vite
+* Axios
+* Tailwind CSS
+* Framer Motion
+
+### Vector Database
+
+* ChromaDB
+
+---
+
+## Project Structure
+
+```text
 lang-rag/
-├── backend/          # FastAPI + LangChain + Chroma
-├── frontend/         # React + Vite
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── models/
+│   │   ├── services/
+│   │   └── utils/
+│   │
+│   ├── uploads/
+│   ├── vectorstore/
+│   ├── requirements.txt
+│   └── main.py
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.js
+│
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
 
-## Prerequisites
+---
 
-- Python 3.11+
-- Node.js 20+
-- [Google AI API key](https://aistudio.google.com/apikey) for Gemini
+## Installation
 
-## Environment setup
-
-1. Copy the example env file:
+### Clone Repository
 
 ```bash
-cp .env.example .env
+git clone https://github.com/Kruthica/lang-rag.git
+cd lang-rag
 ```
 
-2. Set your key in `.env` (or `backend/.env` for local backend runs):
+---
 
-```
-GEMINI_API_KEY=your_key_here
-```
-
-## Run locally (development)
-
-### Backend
+## Backend Setup
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
 
+python -m venv .venv
+```
+
+### Activate Environment
+
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+### Install Dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+### Configure Environment
+
+Create a `.env` file inside the backend folder:
+
+```env
+HF_TOKEN=your_huggingface_token
+
+UPLOAD_DIR=uploads
+CHROMA_DB_DIR=vectorstore
+
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174
+```
+
+### Run Backend
+
+```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API docs: http://localhost:8000/docs
+Backend API:
 
-### Frontend
+```text
+http://localhost:8000
+```
+
+Swagger Documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+---
+
+## Frontend Setup
 
 ```bash
 cd frontend
+
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173 — Vite proxies `/api` to the backend.
+Frontend:
 
-## Docker
-
-From the project root (with `.env` containing `GEMINI_API_KEY`):
-
-```bash
-docker compose up --build
+```text
+http://localhost:5173
 ```
 
-- Frontend: http://localhost
-- Backend: http://localhost:8000
+---
 
-## API examples
+## API Endpoints
 
-### Health
+### Health Check
 
-```bash
-curl http://localhost:8000/health
+```http
+GET /health
 ```
 
-### Upload PDFs
+### Upload Documents
+
+```http
+POST /upload
+```
+
+### Ask Questions
+
+```http
+POST /ask
+```
+
+### Streaming Answers
+
+```http
+POST /ask/stream
+```
+
+### List Documents
+
+```http
+GET /documents
+```
+
+### Delete Document
+
+```http
+DELETE /documents/{document_id}
+```
+
+---
+
+## Example Requests
+
+### Upload PDF
 
 ```bash
 curl -X POST http://localhost:8000/upload \
-  -F "files=@./sample.pdf"
+-F "files=@sample.pdf"
 ```
 
-### Ask (JSON)
+### Ask Question
 
 ```bash
 curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d "{\"question\": \"What is this document about?\", \"history\": []}"
+-H "Content-Type: application/json" \
+-d '{
+  "question":"Summarize this document",
+  "history":[]
+}'
 ```
 
-### List documents
+### Get Documents
 
 ```bash
 curl http://localhost:8000/documents
 ```
 
-### Delete document
+---
 
-```bash
-curl -X DELETE http://localhost:8000/documents/{document_id}
+## Deployment
+
+### Frontend (Vercel)
+
+Set:
+
+```env
+VITE_API_URL=https://your-backend-url.onrender.com
 ```
 
-### Streaming
+Deploy:
 
 ```bash
-curl -N -X POST http://localhost:8000/ask/stream \
-  -H "Content-Type: application/json" \
-  -d "{\"question\": \"Summarize key points\", \"history\": []}"
+vercel --prod
 ```
 
-## Screenshots
+### Backend (Render)
 
-_Add screenshots of the chat UI and source cards after your first run._
+Set environment variables:
 
-## Future improvements
+```env
+HF_TOKEN=your_token
+```
 
-- Multi-user sessions and authentication
-- PostgreSQL for metadata, Redis for caching
-- Hybrid search + reranking
-- OCR and image understanding
-- Voice input and analytics dashboard
+Start command:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+---
+
+## Future Improvements
+
+* Hybrid search (vector + keyword)
+* Reranking pipelines
+* OCR support for scanned PDFs
+* Multi-user authentication
+* Role-based document access
+* Citation highlighting
+* Document collections and folders
+* Voice-based interactions
+
+---
 
 ## License
 
-MIT — use freely for learning and production prototypes.
+MIT License
+
+---
+
+## Author
+
+**Kruthica**
+
+Built as a production-focused Retrieval-Augmented Generation system for document intelligence and conversational knowledge retrieval.
