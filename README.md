@@ -74,6 +74,8 @@ A production-ready Retrieval-Augmented Generation (RAG) system built with FastAP
 * ChromaDB
 
 ---
+## Screenshot 
+<img width="1907" height="912" alt="image" src="https://github.com/user-attachments/assets/478b32b8-a053-4caf-9171-475ee23d0fa0" />
 
 ## Project Structure
 
