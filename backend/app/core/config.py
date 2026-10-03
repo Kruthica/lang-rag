@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         validation_alias="EMBEDDING_MODEL",
     )
     cors_origins: str = Field(
-        default="http://localhost:5173,http://127.0.0.1:5173,https://lang-rag-coral.vercel.app",
+        default="http://localhost:5173,http://127.0.0.1:5173,https://lang-rag-git-main-kruthicas-projects.vercel.app",
         validation_alias="CORS_ORIGINS",
     )
     llm_timeout_seconds: float = Field(
