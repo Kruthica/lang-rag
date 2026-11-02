@@ -269,15 +269,23 @@ curl http://localhost:8000/documents
 
 ### Frontend (Vercel)
 
-Create a Vercel project from this repository. The included `vercel.json` builds
-the `frontend` workspace from the repository root. Set this environment variable
-for Production, Preview, and Development:
+Create a Vercel project from this repository. Use one of these two equivalent
+project configurations:
+
+1. **Recommended:** set Vercel **Root Directory** to `frontend`, leave the
+   install command empty, use `npm run build`, and use `dist` as the output
+   directory. `frontend/vercel.json` supplies these defaults.
+2. Keep the Root Directory as the repository root and use the root
+   `vercel.json`, which installs and builds the frontend workspace and publishes
+   `frontend/dist`.
+
+Set this environment variable for Production, Preview, and Development:
 
 ```env
 VITE_API_URL=https://your-backend-url.onrender.com
 ```
 
-Deploy from the Vercel dashboard or CLI:
+After saving the project settings, redeploy from the Vercel dashboard or CLI:
 
 ```bash
 vercel --prod
