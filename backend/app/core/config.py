@@ -20,6 +20,10 @@ _BACKEND_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     """Central typed configuration — avoids magic strings scattered in code."""
     hf_token: str = Field(default="", validation_alias="HF_TOKEN")
+    hf_model: str = Field(
+        default="meta-llama/Llama-3.1-8B-Instruct",
+        validation_alias="HF_MODEL",
+    )
     model_config = SettingsConfigDict(
         env_file=str(_BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",

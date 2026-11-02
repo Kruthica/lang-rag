@@ -298,6 +298,7 @@ its health check. Set these secrets/values in the Render dashboard:
 
 ```env
 HF_TOKEN=your_token
+HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
 EMBEDDING_PROVIDER=hash
 CORS_ORIGINS=https://your-project.vercel.app
 ```

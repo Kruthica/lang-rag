@@ -1,6 +1,5 @@
 import asyncio
 from typing import AsyncIterator, List, Tuple
-import os
 from huggingface_hub import InferenceClient
 from langchain_core.documents import Document
 
@@ -102,7 +101,9 @@ class RAGService:
         if self._llm is None:
 
             self._llm = InferenceClient(
-                api_key=os.getenv("HF_TOKEN")
+                token=self.settings.hf_token,
+                provider="hf-inference",
+                timeout=self.settings.llm_timeout_seconds,
             )
 
         return self._llm
@@ -153,7 +154,7 @@ class RAGService:
 
             response = await asyncio.to_thread(
                 llm.chat_completion,
-                model="meta-llama/Llama-3.1-8B-Instruct",
+                model=self.settings.hf_model,
                 messages=[
                     {
                         "role": "system",
@@ -173,10 +174,14 @@ class RAGService:
         except Exception as exc:
 
             logger.exception("LLM invocation failed")
-
-            raise Exception(
-                f"LLM request failed: {exc}"
-            ) from exc
+            return AskResponse(
+                answer=(
+                    "Hugging Face could not generate an answer. "
+                    "Check that HF_TOKEN is valid and that the configured "
+                    f"model ({self.settings.hf_model}) is available to it."
+                ),
+                sources=sources,
+            )
 
         return AskResponse(
             answer=answer,
