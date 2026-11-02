@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: lang-rag-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: HF_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CHROMA_DB_DIR
+        value: /tmp/vectorstore
+      - key: UPLOAD_DIR
+        value: /tmp/uploads

@@ -269,13 +269,15 @@ curl http://localhost:8000/documents
 
 ### Frontend (Vercel)
 
-Set:
+Create a Vercel project from this repository. The included `vercel.json` builds
+the `frontend` workspace from the repository root. Set this environment variable
+for Production, Preview, and Development:
 
 ```env
 VITE_API_URL=https://your-backend-url.onrender.com
 ```
 
-Deploy:
+Deploy from the Vercel dashboard or CLI:
 
 ```bash
 vercel --prod
@@ -283,17 +285,32 @@ vercel --prod
 
 ### Backend (Render)
 
-Set environment variables:
+The included `render.yaml` provisions the FastAPI web service with `/health` as
+its health check. Set these secrets/values in the Render dashboard:
 
 ```env
 HF_TOKEN=your_token
+CORS_ORIGINS=https://your-project.vercel.app
 ```
 
-Start command:
+The service uses:
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
+
+Render's free filesystem is ephemeral. Uploaded PDFs and the Chroma vector
+store will be lost on redeploys, restarts, or instance replacement. For
+persistent data, attach a paid Render persistent disk and set:
+
+```env
+UPLOAD_DIR=/var/data/uploads
+CHROMA_DB_DIR=/var/data/vectorstore
+```
+
+Deploy the backend first, verify `https://your-backend-url.onrender.com/health`,
+then put that URL in Vercel's `VITE_API_URL`. Keep `CORS_ORIGINS` restricted to
+the exact Vercel origin(s); do not use `*` with credentials enabled.
 
 ---
 
