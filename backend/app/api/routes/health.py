@@ -11,5 +11,5 @@ async def health_check() -> HealthResponse:
     settings = get_settings()
     return HealthResponse(
         status="ok",
-        gemini_configured=bool(settings.gemini_api_key),
+        hf_configured=bool(settings.hf_token),
     )

@@ -304,7 +304,8 @@ CORS_ORIGINS=https://your-project.vercel.app
 
 `hash` is the default lightweight embedding provider and is suitable for
 Render's free instance. Set `EMBEDDING_PROVIDER=huggingface` only when the
-service has enough memory for the Sentence Transformers model.
+service has enough memory for the Sentence Transformers model. Answers use
+the Hugging Face Inference API with `meta-llama/Llama-3.1-8B-Instruct`.
 
 The service uses:
 

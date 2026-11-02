@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "1.0.0"
-    gemini_configured: bool
+    hf_configured: bool
 
 
 class SourceChunk(BaseModel):

@@ -26,7 +26,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    gemini_api_key: str = Field(default="", validation_alias="GEMINI_API_KEY")
     chroma_db_dir: str = Field(
         default=str(_BACKEND_DIR / "vectorstore"),
         validation_alias="CHROMA_DB_DIR",
@@ -34,11 +33,6 @@ class Settings(BaseSettings):
     upload_dir: str = Field(
         default=str(_BACKEND_DIR / "uploads"),
         validation_alias="UPLOAD_DIR",
-    )
-    model_name: str = Field(default="gemini-2.0-flash", validation_alias="MODEL_NAME")
-    embedding_model: str = Field(
-        default="models/embedding-001",
-        validation_alias="EMBEDDING_MODEL",
     )
     embedding_provider: str = Field(
         default="hash",
