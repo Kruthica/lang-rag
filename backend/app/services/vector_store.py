@@ -49,6 +49,7 @@ class VectorStoreService:
         temporary.replace(self.store_path)
 
     def document_already_indexed(self, document_id: str) -> bool:
+        self._records = self._load()
         return any(
             record.get("metadata", {}).get("document_id") == document_id
             for record in self._records
@@ -87,6 +88,7 @@ class VectorStoreService:
     def similarity_search_with_score(
         self, query: str, k: int = 5
     ) -> List[Tuple[Document, float]]:
+        self._records = self._load()
         query_vector = self.embeddings.embed_query(query)
         scored = [
             (
