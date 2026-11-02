@@ -1,14 +1,10 @@
-"""
-ChromaDB vector store — persistent local storage with deduplication.
+"""Persistent lightweight vector store for memory-constrained deployments."""
 
-Existing collections are reused on restart. Before ingesting, we check whether
-a document_id already has vectors to avoid duplicate embeddings.
-"""
-
+import json
+import math
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
@@ -24,67 +20,93 @@ class VectorStoreError(Exception):
 
 
 class VectorStoreService:
-    """Thin wrapper around LangChain Chroma with project-specific helpers."""
+    """Persist document chunks and vectors without a native database process."""
 
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or get_settings()
         self.persist_dir = Path(self.settings.chroma_db_dir)
         self.persist_dir.mkdir(parents=True, exist_ok=True)
-        self._store: Optional[Chroma] = None
+        self.store_path = self.persist_dir / "vectors.json"
+        self._records: List[Dict] = self._load()
 
     @property
     def embeddings(self) -> Embeddings:
-        # Embeddings are cached globally via get_settings(); do not pass Settings
-        # to lru_cache (Pydantic models are unhashable).
         return get_embeddings()
 
-    def get_store(self) -> Chroma:
-        if self._store is None:
-            self._store = Chroma(
-                collection_name=self.settings.collection_name,
-                embedding_function=self.embeddings,
-                persist_directory=str(self.persist_dir),
-            )
-            logger.info("Chroma collection ready at %s", self.persist_dir)
-        return self._store
+    def _load(self) -> List[Dict]:
+        if not self.store_path.exists():
+            return []
+        try:
+            data = json.loads(self.store_path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not load vector store: %s", exc)
+            return []
+
+    def _save(self) -> None:
+        temporary = self.store_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(self._records), encoding="utf-8")
+        temporary.replace(self.store_path)
 
     def document_already_indexed(self, document_id: str) -> bool:
-        """Return True if any vectors exist for this document_id."""
-        store = self.get_store()
-        try:
-            result = store.get(where={"document_id": document_id}, limit=1)
-            ids = result.get("ids") or []
-            return len(ids) > 0
-        except Exception as exc:
-            logger.warning("Index check failed: %s", exc)
-            return False
+        return any(
+            record.get("metadata", {}).get("document_id") == document_id
+            for record in self._records
+        )
 
     def add_documents(self, chunks: List[Document]) -> int:
         if not chunks:
             return 0
-        store = self.get_store()
         try:
-            store.add_documents(chunks)
+            vectors = self.embeddings.embed_documents(
+                [chunk.page_content for chunk in chunks]
+            )
+            self._records.extend(
+                {
+                    "content": chunk.page_content,
+                    "metadata": chunk.metadata,
+                    "vector": vector,
+                }
+                for chunk, vector in zip(chunks, vectors)
+            )
+            self._save()
             return len(chunks)
-        except Exception as exc:
-            logger.exception("Failed to add documents to Chroma")
+        except (OSError, TypeError, ValueError) as exc:
+            logger.exception("Failed to persist vectors")
             raise VectorStoreError(f"Vector store write failed: {exc}") from exc
 
     def delete_by_document_id(self, document_id: str) -> None:
-        store = self.get_store()
-        try:
-            store.delete(where={"document_id": document_id})
-            logger.info("Deleted vectors for document_id=%s", document_id)
-        except Exception as exc:
-            logger.exception("Vector delete failed")
-            raise VectorStoreError(f"Vector store delete failed: {exc}") from exc
+        self._records = [
+            record
+            for record in self._records
+            if record.get("metadata", {}).get("document_id") != document_id
+        ]
+        self._save()
+        logger.info("Deleted vectors for document_id=%s", document_id)
 
     def similarity_search_with_score(
         self, query: str, k: int = 5
     ) -> List[Tuple[Document, float]]:
-        store = self.get_store()
-        try:
-            return store.similarity_search_with_score(query, k=k)
-        except Exception as exc:
-            logger.exception("Similarity search failed")
-            raise VectorStoreError(f"Retrieval failed: {exc}") from exc
+        query_vector = self.embeddings.embed_query(query)
+        scored = [
+            (
+                Document(
+                    page_content=record["content"],
+                    metadata=record.get("metadata", {}),
+                ),
+                self._cosine_similarity(query_vector, record["vector"]),
+            )
+            for record in self._records
+        ]
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return scored[:k]
+
+    @staticmethod
+    def _cosine_similarity(first: List[float], second: List[float]) -> float:
+        if len(first) != len(second):
+            return 0.0
+        numerator = sum(left * right for left, right in zip(first, second))
+        first_norm = math.sqrt(sum(value * value for value in first))
+        second_norm = math.sqrt(sum(value * value for value in second))
+        denominator = first_norm * second_norm
+        return numerator / denominator if denominator else 0.0
