@@ -1,29 +1,3 @@
-"""
-RAG API entrypoint — run with:
-  uvicorn main:app --reload --host 0.0.0.0 --port 8000
-"""
-
-from pathlib import Path
-from dotenv import load_dotenv
-import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://your-chatbot.vercel.app"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-BASE_DIR = Path(__file__).resolve().parent
-env_path = BASE_DIR / ".env"
-
-print("ENV PATH =", env_path)
-
-load_dotenv(dotenv_path=env_path)
-
-
 from contextlib import asynccontextmanager
 from pathlib import Path
 
