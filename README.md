@@ -298,7 +298,7 @@ its health check. Set these secrets/values in the Render dashboard:
 
 ```env
 HF_TOKEN=your_token
-HF_MODEL=meta-llama/Llama-3.1-8B-Instruct
+HF_MODEL=meta-llama/Meta-Llama-3.1-8B-Instruct
 EMBEDDING_PROVIDER=hash
 CORS_ORIGINS=https://your-project.vercel.app
 ```
@@ -306,7 +306,10 @@ CORS_ORIGINS=https://your-project.vercel.app
 `hash` is the default lightweight embedding provider and is suitable for
 Render's free instance. Set `EMBEDDING_PROVIDER=huggingface` only when the
 service has enough memory for the Sentence Transformers model. Answers use
-the Hugging Face Inference API with `meta-llama/Llama-3.1-8B-Instruct`.
+the Hugging Face Inference API with
+`meta-llama/Meta-Llama-3.1-8B-Instruct`. The local `transformers` pipeline
+shown in Hugging Face examples is not suitable for Render's free memory limit;
+the deployed service calls the hosted inference API instead.
 
 The service uses:
 

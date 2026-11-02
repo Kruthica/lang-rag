@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     """Central typed configuration — avoids magic strings scattered in code."""
     hf_token: str = Field(default="", validation_alias="HF_TOKEN")
     hf_model: str = Field(
-        default="meta-llama/Llama-3.1-8B-Instruct",
+        default="meta-llama/Meta-Llama-3.1-8B-Instruct",
         validation_alias="HF_MODEL",
     )
     model_config = SettingsConfigDict(
