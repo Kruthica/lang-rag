@@ -148,9 +148,8 @@ class RAGService:
             question=question,
         )
 
-        llm = self._get_llm()
-
         try:
+            llm = self._get_llm()
 
             response = await asyncio.to_thread(
                 llm.chat_completion,
@@ -178,7 +177,8 @@ class RAGService:
                 answer=(
                     "Hugging Face could not generate an answer. "
                     "Check that HF_TOKEN is valid and that the configured "
-                    f"model ({self.settings.hf_model}) is available to it."
+                    f"model ({self.settings.hf_model}) is available to it. "
+                    f"Error type: {type(exc).__name__}."
                 ),
                 sources=sources,
             )
