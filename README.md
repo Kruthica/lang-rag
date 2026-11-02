@@ -298,8 +298,13 @@ its health check. Set these secrets/values in the Render dashboard:
 
 ```env
 HF_TOKEN=your_token
+EMBEDDING_PROVIDER=hash
 CORS_ORIGINS=https://your-project.vercel.app
 ```
+
+`hash` is the default lightweight embedding provider and is suitable for
+Render's free instance. Set `EMBEDDING_PROVIDER=huggingface` only when the
+service has enough memory for the Sentence Transformers model.
 
 The service uses:
 

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
         default="models/embedding-001",
         validation_alias="EMBEDDING_MODEL",
     )
+    embedding_provider: str = Field(
+        default="hash",
+        validation_alias="EMBEDDING_PROVIDER",
+    )
     cors_origins: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173,https://lang-rag-git-main-kruthicas-projects.vercel.app",
         validation_alias="CORS_ORIGINS",
