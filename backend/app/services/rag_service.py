@@ -102,7 +102,7 @@ class RAGService:
 
             self._llm = InferenceClient(
                 token=self.settings.hf_token,
-                provider="hf-inference",
+                provider="auto",
                 timeout=self.settings.llm_timeout_seconds,
             )
 
