@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -8,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import ask, documents, health, upload
 from app.core.config import get_settings
 from app.core.logging_config import setup_logging, get_logger
+from app.services.embedding_service import get_embeddings
 from app.utils.file_utils import ensure_dir
 
 setup_logging()
@@ -19,6 +21,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     ensure_dir(Path(settings.upload_dir))
     ensure_dir(Path(settings.chroma_db_dir))
+    await asyncio.to_thread(get_embeddings)
     logger.info("RAG backend started — upload_dir=%s chroma=%s", settings.upload_dir, settings.chroma_db_dir)
     yield
     logger.info("RAG backend shutdown")
@@ -35,6 +38,7 @@ settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
+    allow_origin_regex=r"https://[a-zA-Z0-9-]+\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
