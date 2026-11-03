@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 
 TOP_K = 8
 HF_MODEL_ID = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+HF_FALLBACK_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"
 
 SYSTEM_PROMPT = """
 You are an intelligent, conversational, and highly capable research assistant.
@@ -149,43 +150,35 @@ class RAGService:
             question=question,
         )
 
-        try:
-            llm = self._get_llm()
+        llm = self._get_llm()
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
+        last_error: Exception | None = None
 
-            response = await asyncio.to_thread(
-                llm.chat_completion,
-                model=HF_MODEL_ID,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": SYSTEM_PROMPT,
-                    },
-                    {
-                        "role": "user",
-                        "content": user_content,
-                    },
-                ],
-                max_tokens=512,
-                temperature=0.2,
-            )
+        for model_id in (HF_MODEL_ID, HF_FALLBACK_MODEL_ID):
+            try:
+                response = await asyncio.to_thread(
+                    llm.chat_completion,
+                    model=model_id,
+                    messages=messages,
+                    max_tokens=512,
+                    temperature=0.2,
+                )
+                answer = response.choices[0].message.content
+                return AskResponse(answer=answer, sources=sources)
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Hugging Face model %s failed: %s", model_id, exc)
 
-            answer = response.choices[0].message.content
-
-        except Exception as exc:
-
-            logger.exception("LLM invocation failed")
-            return AskResponse(
-                answer=(
-                    "Hugging Face could not generate an answer. "
-                    "Check that HF_TOKEN is valid and that the configured "
-                    f"model ({HF_MODEL_ID}) is available to it. "
-                    f"Error type: {type(exc).__name__}."
-                ),
-                sources=sources,
-            )
-
+        logger.error("All Hugging Face models failed: %s", last_error)
         return AskResponse(
-            answer=answer,
+            answer=(
+                "I could not reach a hosted language model, so here is the "
+                "relevant text found in your document:\n\n"
+                f"{context}"
+            ),
             sources=sources,
         )
 
