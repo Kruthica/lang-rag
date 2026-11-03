@@ -9,6 +9,7 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "1.0.0"
     hf_configured: bool
+    hf_model: str
 
 
 class SourceChunk(BaseModel):

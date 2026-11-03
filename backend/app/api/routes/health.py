@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.core.config import get_settings
 from app.models.schemas import HealthResponse
+from app.services.rag_service import HF_MODEL_ID
 
 router = APIRouter(tags=["health"])
 
@@ -12,4 +13,5 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status="ok",
         hf_configured=bool(settings.hf_token),
+        hf_model=HF_MODEL_ID,
     )
