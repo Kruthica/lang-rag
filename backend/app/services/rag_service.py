@@ -12,6 +12,7 @@ from app.services.vector_store import VectorStoreService
 logger = get_logger(__name__)
 
 TOP_K = 8
+HF_MODEL_ID = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
 SYSTEM_PROMPT = """
 You are an intelligent, conversational, and highly capable research assistant.
@@ -153,7 +154,7 @@ class RAGService:
 
             response = await asyncio.to_thread(
                 llm.chat_completion,
-                model=self.settings.hf_model,
+                model=HF_MODEL_ID,
                 messages=[
                     {
                         "role": "system",
@@ -177,7 +178,7 @@ class RAGService:
                 answer=(
                     "Hugging Face could not generate an answer. "
                     "Check that HF_TOKEN is valid and that the configured "
-                    f"model ({self.settings.hf_model}) is available to it. "
+                    f"model ({HF_MODEL_ID}) is available to it. "
                     f"Error type: {type(exc).__name__}."
                 ),
                 sources=sources,
