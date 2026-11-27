@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Bot, Copy, Check, User } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SourceCard from './SourceCard';
 
 export default function MessageBubble({ message, isStreaming }) {
   const isUser = message.role === 'user';
@@ -43,7 +44,7 @@ export default function MessageBubble({ message, isStreaming }) {
           <p className="text-sm leading-relaxed text-gray-100">{message.content}</p>
         ) : (
           <>
-            <div className="prose prose-invert prose-sm max-w-none">
+            <div className={`prose prose-invert prose-sm max-w-none ${message.isError ? 'text-amber-300' : ''}`}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -78,6 +79,19 @@ export default function MessageBubble({ message, isStreaming }) {
                 {message.content || (isStreaming ? '…' : '')}
               </ReactMarkdown>
             </div>
+
+            {message.sources?.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs font-medium text-gray-400">Sources</p>
+                {message.sources.map((source, index) => (
+                  <SourceCard
+                    key={`${source.filename}-${source.page}-${index}`}
+                    source={source}
+                    index={index}
+                  />
+                ))}
+              </div>
+            )}
 
             {!isUser && message.content && (
               <button

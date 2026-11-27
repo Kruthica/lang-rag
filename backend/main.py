@@ -22,14 +22,18 @@ async def lifespan(app: FastAPI):
     ensure_dir(Path(settings.upload_dir))
     ensure_dir(Path(settings.chroma_db_dir))
     await asyncio.to_thread(get_embeddings)
-    logger.info("RAG backend started — upload_dir=%s chroma=%s", settings.upload_dir, settings.chroma_db_dir)
+    logger.info(
+        "RAG backend started — upload_dir=%s vector_store=%s",
+        settings.upload_dir,
+        settings.chroma_db_dir,
+    )
     yield
     logger.info("RAG backend shutdown")
 
 
 app = FastAPI(
     title="Production RAG API",
-    description="Upload PDFs, embed with Gemini, chat with grounded answers.",
+    description="Upload PDFs, index their contents, and ask grounded questions.",
     version="1.0.0",
     lifespan=lifespan,
 )

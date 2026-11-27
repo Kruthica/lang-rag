@@ -2,6 +2,8 @@
 End-to-end ingestion: save PDF → load → chunk → embed → Chroma + registry.
 """
 
+import asyncio
+import hashlib
 import uuid
 from pathlib import Path
 from typing import List, Tuple
@@ -29,32 +31,48 @@ class IngestService:
         ensure_dir(self.upload_dir)
         self.vector_store = vector_store or VectorStoreService(self.settings)
 
-    async def save_upload(self, file: UploadFile) -> Path:
-        """Persist raw bytes under uploads/ with a unique name."""
-        original = Path(file.filename or "document.pdf").name
+    async def save_upload(self, file: UploadFile) -> Tuple[Path, str]:
+        """Stream a size-limited PDF to disk and return its path and digest."""
+        original = Path((file.filename or "document.pdf").replace("\\", "/")).name
         if not original.lower().endswith(".pdf"):
             raise PDFLoadError("Only PDF files are allowed")
 
-        doc_id = str(uuid.uuid4())
-        safe_name = f"{doc_id}_{original}"
-        dest = self.upload_dir / safe_name
+        content_type = (file.content_type or "").lower().split(";", 1)[0].strip()
+        if content_type not in {"", "application/pdf", "application/octet-stream"}:
+            raise PDFLoadError("The uploaded file must have PDF content type")
 
-        content = await file.read()
-        if len(content) == 0:
-            raise PDFLoadError("Empty file")
+        destination = self.upload_dir / f"{uuid.uuid4()}_{original}"
+        digest = hashlib.sha256()
+        header = bytearray()
+        total_size = 0
+        try:
+            with destination.open("wb") as output:
+                while chunk := await file.read(1024 * 1024):
+                    total_size += len(chunk)
+                    if total_size > self.settings.max_upload_size_bytes:
+                        raise PDFLoadError(
+                            "File exceeds the configured "
+                            f"{self.settings.max_upload_size_bytes}-byte limit"
+                        )
+                    if len(header) < 1024:
+                        header.extend(chunk[: 1024 - len(header)])
+                    digest.update(chunk)
+                    output.write(chunk)
 
-        if len(content) > 50 * 1024 * 1024:
-            raise PDFLoadError("File exceeds 50MB limit")
+            if total_size == 0:
+                raise PDFLoadError("The uploaded PDF is empty")
+            if b"%PDF-" not in header:
+                raise PDFLoadError("The uploaded file is not a valid PDF")
+        except Exception:
+            destination.unlink(missing_ok=True)
+            raise
 
-        dest.write_bytes(content)
-        logger.info("Saved upload to %s", dest)
-        return dest
+        logger.info("Saved upload to %s", destination)
+        return destination, digest.hexdigest()
 
     def ingest_file(self, path: Path, filename: str) -> Tuple[str, int]:
         """
         Process one PDF on disk. Returns (document_id, chunk_count).
-        Skips re-embedding if document_id already indexed (by filename hash check done via new uuid each time —
-        dedup is per upload id stored in registry).
         """
         doc_id = path.name.split("_", 1)[0] if "_" in path.name else str(uuid.uuid4())
 
@@ -66,34 +84,53 @@ class IngestService:
         chunks = chunk_documents(pages)
         count = self.vector_store.add_documents(chunks)
 
-        add_document_record(
-            self.upload_dir,
-            filename=filename,
-            stored_path=str(path),
-            chunk_count=count,
-            document_id=doc_id,
-        )
         return doc_id, count
 
-    def _find_existing_by_filename(self, filename: str) -> str | None:
-        """Return document_id if this filename was already indexed (avoid duplicate embeddings)."""
+    def _find_existing_by_hash(self, content_hash: str) -> dict | None:
+        """Return a registry record for identical file content, if present."""
         for record in load_registry(self.upload_dir):
-            if record.get("filename") == filename:
-                return record.get("id")
+            if record.get("content_hash") == content_hash:
+                return record
+            stored_path = record.get("stored_path")
+            if stored_path and Path(stored_path).is_file():
+                digest = hashlib.sha256()
+                with Path(stored_path).open("rb") as source:
+                    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                if digest.hexdigest() == content_hash:
+                    return record
         return None
 
     async def process_upload(self, file: UploadFile) -> Tuple[str, str, int]:
         """Save and ingest a single uploaded file."""
-        original = Path(file.filename or "document.pdf").name
-        existing_id = self._find_existing_by_filename(original)
-        if existing_id and self.vector_store.document_already_indexed(existing_id):
-            logger.info("Skipping duplicate upload: %s", original)
-            record = next(
-                (r for r in load_registry(self.upload_dir) if r.get("id") == existing_id),
-                {},
-            )
-            return existing_id, original, int(record.get("chunk_count", 0))
+        original = Path((file.filename or "document.pdf").replace("\\", "/")).name
+        path, content_hash = await self.save_upload(file)
+        doc_id = path.name.split("_", 1)[0]
+        try:
+            duplicate = self._find_existing_by_hash(content_hash)
+            if duplicate and self.vector_store.document_already_indexed(
+                duplicate["id"]
+            ):
+                path.unlink(missing_ok=True)
+                logger.info("Skipping duplicate content upload: %s", original)
+                return duplicate["id"], duplicate.get("filename", original), int(
+                    duplicate.get("chunk_count", 0)
+                )
 
-        path = await self.save_upload(file)
-        doc_id, count = self.ingest_file(path, original)
-        return doc_id, original, count
+            _, count = await asyncio.to_thread(self.ingest_file, path, original)
+            add_document_record(
+                self.upload_dir,
+                filename=original,
+                stored_path=str(path),
+                chunk_count=count,
+                document_id=doc_id,
+                content_hash=content_hash,
+            )
+            return doc_id, original, count
+        except Exception:
+            try:
+                self.vector_store.delete_by_document_id(doc_id)
+            except Exception:
+                logger.exception("Could not roll back vectors for %s", doc_id)
+            path.unlink(missing_ok=True)
+            raise

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List
 
 from langchain_core.documents import Document
-from langchain_community.document_loaders import PyPDFLoader
+from pypdf import PdfReader
 
 from app.core.logging_config import get_logger
 from app.utils.text_cleaner import clean_text
@@ -31,45 +31,56 @@ def load_pdf(path: Path, document_id: str, filename: str) -> List[Document]:
       - page: 1-based page number
     """
     if not path.exists():
-        raise PDFLoadError(f"File not found: {path}")
+        raise PDFLoadError("Uploaded PDF could not be found during processing")
 
     if path.suffix.lower() != ".pdf":
         raise PDFLoadError("Only PDF files are supported")
 
     try:
-        loader = PyPDFLoader(str(path))
-        pages = loader.load()
+        reader = PdfReader(str(path))
+        if reader.is_encrypted:
+            raise PDFLoadError("Password-protected PDFs are not supported")
+        if not reader.pages:
+            raise PDFLoadError("PDF contains no pages")
+
+        pages = []
+        for page_number, page in enumerate(reader.pages, start=1):
+            page_text = page.extract_text() or ""
+            cleaned = clean_text(page_text)
+            if cleaned:
+                pages.append(
+                    Document(
+                        page_content=cleaned,
+                        metadata={
+                            "source": filename,
+                            "page": page_number,
+                        },
+                    )
+                )
+    except PDFLoadError:
+        raise
     except Exception as exc:
         logger.exception("Failed to load PDF %s", path)
-        raise PDFLoadError(f"Could not read PDF (corrupted or unsupported): {exc}") from exc
+        raise PDFLoadError(
+            "Could not read this PDF. It may be corrupted or use unsupported encryption."
+        ) from exc
 
     if not pages:
         raise PDFLoadError("PDF contains no extractable text")
 
     documents: List[Document] = []
     for doc in pages:
-        page_num = doc.metadata.get("page", 0)
-        # PyPDFLoader uses 0-based page index in metadata
-        page_display = int(page_num) + 1 if page_num is not None else None
-
-        cleaned = clean_text(doc.page_content)
-        if not cleaned:
-            continue
-
         documents.append(
             Document(
-                page_content=cleaned,
+                page_content=doc.page_content,
                 metadata={
                     "source": filename,
                     "document_id": document_id,
-                    "page": page_display,
+                    "page": doc.metadata["page"],
                     "file_path": str(path),
                 },
             )
         )
-
-    if not documents:
-        raise PDFLoadError("PDF has no readable text after cleaning")
 
     logger.info("Loaded %d pages from %s", len(documents), filename)
     return documents
