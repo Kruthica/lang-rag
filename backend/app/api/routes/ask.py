@@ -35,15 +35,15 @@ async def ask_question_stream(body: AskRequest):
     rag: RAGService = get_rag_service()
 
     async def event_generator():
-        _, sources = rag.retrieve(body.question)
-        # Send sources first so UI can render citations while text streams
-        yield f"data: {json.dumps({'type': 'sources', 'sources': [s.model_dump() for s in sources]})}\n\n"
-
-        async for token in rag.ask_stream(body.question, body.history):
-            payload = json.dumps({"type": "token", "content": token})
-            yield f"data: {payload}\n\n"
-
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        try:
+            response = await rag.ask(body.question, body.history)
+            sources = [source.model_dump() for source in response.sources]
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
+            yield f"data: {json.dumps({'type': 'token', 'content': response.answer})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception:
+            logger.exception("Streaming answer failed")
+            yield f"data: {json.dumps({'type': 'error', 'detail': 'Could not generate an answer. Please try again.'})}\n\n"
 
     return StreamingResponse(
         event_generator(),

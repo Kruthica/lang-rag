@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.core.logging_config import get_logger
 from app.models.schemas import DocumentInfo, DocumentsListResponse
 from app.services.vector_store import VectorStoreError, VectorStoreService
-from app.utils.file_utils import load_registry, remove_document_record
+from app.utils.file_utils import get_document_record, load_registry, remove_document_record
 
 router = APIRouter(tags=["documents"])
 logger = get_logger(__name__)
@@ -34,18 +34,22 @@ async def list_documents() -> DocumentsListResponse:
 async def delete_document(document_id: str) -> dict:
     settings = get_settings()
     upload_dir = Path(settings.upload_dir)
-    record = remove_document_record(upload_dir, document_id)
+    record = get_document_record(upload_dir, document_id)
 
     if not record:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Remove vectors from Chroma
+    # Keep the registry intact if vector deletion fails.
     vector_store: VectorStoreService = get_vector_store_service()
     try:
         vector_store.delete_by_document_id(document_id)
     except VectorStoreError as exc:
         logger.error("Vector delete error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=500, detail="Could not remove document vectors"
+        ) from exc
+
+    remove_document_record(upload_dir, document_id)
 
     # Remove file from disk
     stored = record.get("stored_path")

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CloudUpload, File, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useChat } from '../context/ChatContext';
 
 const MAX_MB = 50;
@@ -22,11 +23,18 @@ export default function UploadPanel() {
 
   const onFiles = useCallback(
     async (fileList) => {
-      const files = validate(Array.from(fileList));
+      const selected = Array.from(fileList || []);
+      const files = validate(selected);
+      if (files.length !== selected.length) {
+        toast.error('Only PDF files up to 50MB can be uploaded');
+      }
       if (!files.length) return;
       setPending(files.map((f) => f.name));
-      await handleUpload(files);
-      setPending([]);
+      try {
+        await handleUpload(files);
+      } finally {
+        setPending([]);
+      }
     },
     [handleUpload]
   );
@@ -56,7 +64,10 @@ export default function UploadPanel() {
           accept=".pdf,application/pdf"
           multiple
           className="hidden"
-          onChange={(e) => onFiles(e.target.files)}
+          onChange={(e) => {
+            onFiles(e.target.files);
+            e.target.value = '';
+          }}
         />
         <CloudUpload className="mb-2 h-8 w-8 text-accent-glow" />
         <span className="text-sm font-medium">Drop PDFs or click to upload</span>

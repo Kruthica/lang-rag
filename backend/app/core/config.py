@@ -20,14 +20,11 @@ _BACKEND_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     """Central typed configuration — avoids magic strings scattered in code."""
     hf_token: str = Field(default="", validation_alias="HF_TOKEN")
-    hf_model: str = Field(
-        default="meta-llama/Meta-Llama-3.1-8B-Instruct",
-        validation_alias="HF_MODEL",
-    )
     model_config = SettingsConfigDict(
         env_file=str(_BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     chroma_db_dir: str = Field(
@@ -37,6 +34,11 @@ class Settings(BaseSettings):
     upload_dir: str = Field(
         default=str(_BACKEND_DIR / "uploads"),
         validation_alias="UPLOAD_DIR",
+    )
+    max_upload_size_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        gt=0,
+        validation_alias="MAX_UPLOAD_SIZE_BYTES",
     )
     embedding_provider: str = Field(
         default="hash",

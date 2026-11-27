@@ -1,4 +1,5 @@
 import asyncio
+import re
 from typing import AsyncIterator, List, Tuple
 from huggingface_hub import InferenceClient
 from langchain_core.documents import Document
@@ -12,6 +13,7 @@ from app.services.vector_store import VectorStoreService
 logger = get_logger(__name__)
 
 TOP_K = 8
+MIN_RELEVANCE_SCORE = 0.08
 HF_MODEL_ID = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 HF_FALLBACK_MODEL_ID = "HuggingFaceH4/zephyr-7b-beta"
 
@@ -37,13 +39,24 @@ Question:
 Answer using only the context above.
 """
 
+STOP_WORDS = {
+    "about", "after", "again", "also", "and", "are", "because", "before",
+    "being", "between", "could", "does", "from", "have", "into", "just",
+    "more", "most", "only", "other", "should", "some", "than", "that",
+    "their", "there", "these", "they", "this", "those", "through", "under",
+    "very", "what", "when", "where", "which", "while", "with", "would",
+    "your", "you", "the", "for", "was", "were", "will", "who", "why",
+    "how", "can", "does", "did", "has", "had", "his", "her", "its", "our",
+    "not", "but", "all", "any", "out", "too", "use", "using",
+}
 
-def _distance_to_confidence(distance: float) -> float:
 
-    if distance <= 0:
-        return 1.0
-
-    return max(0.0, min(1.0, 1.0 / (1.0 + distance)))
+def _significant_terms(text: str) -> set[str]:
+    return {
+        term
+        for term in re.findall(r"\w+", text.lower())
+        if len(term) > 2 and term not in STOP_WORDS
+    }
 
 
 def _build_context(
@@ -60,7 +73,7 @@ def _build_context(
         filename = str(meta.get("source", "unknown"))
         page = meta.get("page")
 
-        confidence = _distance_to_confidence(float(score))
+        confidence = max(0.0, min(1.0, float(score)))
 
         header = f"[{idx}] {filename}"
 
@@ -105,7 +118,7 @@ class RAGService:
             self._llm = InferenceClient(
                 token=self.settings.hf_token,
                 provider="auto",
-                timeout=self.settings.llm_timeout_seconds,
+                timeout=min(self.settings.llm_timeout_seconds, 45.0),
             )
 
         return self._llm
@@ -114,12 +127,28 @@ class RAGService:
         self,
         question: str,
         k: int = TOP_K,
+        history: List[ChatMessage] | None = None,
     ) -> Tuple[str, List[SourceChunk]]:
+        retrieval_query = question
+        query_terms = _significant_terms(question)
+        if not query_terms and history:
+            recent_history = history[-4:]
+            retrieval_query = " ".join(
+                [message.content for message in recent_history] + [question]
+            )
+            query_terms = _significant_terms(retrieval_query)
 
         results = self.vector_store.similarity_search_with_score(
-            question,
+            retrieval_query,
             k=k,
         )
+        results = [
+            (document, score)
+            for document, score in results
+            if score >= MIN_RELEVANCE_SCORE
+            and query_terms
+            and query_terms.intersection(_significant_terms(document.page_content))
+        ]
 
         if not results:
             return "", []
@@ -134,11 +163,18 @@ class RAGService:
 
         history = history or []
 
-        context, sources = self.retrieve(question)
+        context, sources = self.retrieve(question, history=history)
 
         if not context.strip():
+            answer = (
+                "I couldn't find relevant information for that question in the "
+                "uploaded documents. Try asking about a term or detail that "
+                "appears in them."
+                if self.vector_store.has_documents()
+                else "No documents are indexed yet. Upload a readable PDF first."
+            )
             return AskResponse(
-                answer="No documents indexed yet.",
+                answer=answer,
                 sources=[],
             )
 
@@ -150,13 +186,23 @@ class RAGService:
             question=question,
         )
 
-        llm = self._get_llm()
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ]
         last_error: Exception | None = None
 
+        if not self.settings.hf_token.strip():
+            logger.warning("HF_TOKEN is not configured; returning retrieved context")
+            return AskResponse(
+                answer=(
+                    "Answer generation is not configured, but these relevant "
+                    f"document passages may help:\n\n{context}"
+                ),
+                sources=sources,
+            )
+
+        llm = self._get_llm()
         for model_id in (HF_MODEL_ID, HF_FALLBACK_MODEL_ID):
             try:
                 response = await asyncio.to_thread(
@@ -175,8 +221,8 @@ class RAGService:
         logger.error("All Hugging Face models failed: %s", last_error)
         return AskResponse(
             answer=(
-                "I could not reach a hosted language model, so here is the "
-                "relevant text found in your document:\n\n"
+                "I could not reach a hosted language model, so here are the "
+                "relevant passages retrieved from your documents:\n\n"
                 f"{context}"
             ),
             sources=sources,

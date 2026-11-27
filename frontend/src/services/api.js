@@ -17,7 +17,6 @@ export async function uploadFiles(files, onProgress) {
   files.forEach((file) => form.append('files', file));
 
   const { data } = await client.post('/upload', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (event) => {
       if (onProgress && event.total) {
         onProgress(Math.round((event.loaded * 100) / event.total));
@@ -63,30 +62,55 @@ export function askQuestionStream(question, history, { onSources, onToken, onDon
       if (!response.ok) {
         throw new Error(`Stream failed: ${response.status}`);
       }
+      if (!response.body) {
+        throw new Error('The server did not provide an answer stream');
+      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let completed = false;
+      const processEvent = (event) => {
+        const data = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart())
+          .join('\n');
+        if (!data) return;
+
+        let payload;
+        try {
+          payload = JSON.parse(data);
+        } catch {
+          throw new Error('The server returned an invalid answer response');
+        }
+
+        if (payload.type === 'sources' && onSources) onSources(payload.sources);
+        if (payload.type === 'token' && onToken) onToken(payload.content);
+        if (payload.type === 'error') {
+          throw new Error(payload.detail || 'Could not generate an answer');
+        }
+        if (payload.type === 'done') {
+          completed = true;
+          if (onDone) onDone();
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
-            if (payload.type === 'sources' && onSources) onSources(payload.sources);
-            if (payload.type === 'token' && onToken) onToken(payload.content);
-            if (payload.type === 'done' && onDone) onDone();
-          } catch {
-            /* ignore malformed chunks */
-          }
+        if (done) {
+          buffer += decoder.decode();
+          break;
         }
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || '';
+
+        events.forEach(processEvent);
       }
-      if (onDone) onDone();
+
+      buffer.split(/\r?\n\r?\n/).forEach(processEvent);
+
+      if (!completed) throw new Error('The answer stream ended unexpectedly');
     })
     .catch((err) => {
       if (err.name !== 'AbortError' && onError) onError(err);

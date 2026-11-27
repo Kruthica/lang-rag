@@ -49,7 +49,7 @@ export function ChatProvider({ children }) {
       const result = await uploadFiles(files, setUploadProgress);
 
       if (result.uploaded?.length) {
-        toast.success(`Indexed ${result.uploaded.length} file(s)`);
+        toast.success(`Ready: ${result.uploaded.length} file(s) indexed`);
       }
 
       if (result.skipped?.length) {
@@ -132,9 +132,7 @@ export function ChatProvider({ children }) {
         let content = '';
 
         askQuestionStream(question, history, {
-          onSources: () => {
-            // Ignore sources
-          },
+          onSources: (sources) => appendAssistant({ sources }),
 
           onToken: (token) => {
             content += token;
@@ -145,8 +143,10 @@ export function ChatProvider({ children }) {
             setIsLoading(false);
           },
 
-          onError: () => {
-            toast.error('Something went wrong');
+          onError: (error) => {
+            const message = error.message || 'Could not generate an answer';
+            toast.error(message);
+            appendAssistant({ content: message, isError: true });
             setIsLoading(false);
           },
         });
@@ -158,11 +158,12 @@ export function ChatProvider({ children }) {
 
       appendAssistant({
         content: response.answer,
+        sources: response.sources || [],
       });
     } catch (err) {
-      toast.error(
-        err.response?.data?.detail || 'Request failed'
-      );
+      const message = err.response?.data?.detail || 'Request failed. Please try again.';
+      toast.error(message);
+      appendAssistant({ content: message, isError: true });
     } finally {
       if (!useStreaming) {
         setIsLoading(false);
